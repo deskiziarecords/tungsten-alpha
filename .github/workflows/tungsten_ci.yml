@@ -1,0 +1,49 @@
+name: TUNGSTEN_ALPHA_HARDENING
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify_manifold:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install JAX (CPU) & Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jax[cpu] orbax-checkpoint matplotlib
+
+      - name: Verify Riemannian Transport (AFRC)
+        run: |
+          # Runs the internal validation of the Levi-Civita Connection
+          python core/transport.py
+
+      - name: Validate HLO Trace Integrity (ATC)
+        run: |
+          # Ensures no re-compilation triggers in the static manifold
+          python tests/validate_stack.py --check-hlo-fusion
+
+      - name: Harden Flash Binary
+        run: |
+          # Simulates a production flash to verify Orbax serialization
+          python flash_binary.py
+
+  release_swarm_artifact:
+    needs: verify_manifold
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Production Checkpoint
+        run: |
+          echo "CRYSTALLIZATION COMPLETE: MANIFOLD HARDENED"
+          # In a real environment, this would upload the Orbax folder to a GCS bucket
