@@ -1,69 +1,59 @@
 """
-TUNGSTEN ALPHA: ADELIC FISHER RESURGENCE HARDENER (AFRH)
-=======================================================
-Calculates and Hardens the Fisher Information Metric.
-Regulates the manifold curvature via Natural Gradient estimation.
+TUNGSTEN ALPHA: ADELIC RECURSIVE STATE MANIFOLD (ARSM)
+=====================================================
+Manages temporal continuity through recursive manifold updates.
+Preserves system 'Calma' across non-stationary time-steps.
 """
 
 import jax
 import jax.numpy as jnp
-from jax import jit, grad, vjp, vmap
+from jax import jit, lax
 
-@jit
-def compute_fisher_vector_product(log_likelihood_fn, params, vectors):
-    """
-    Computes the Fisher-Vector Product (FVP) using the Pearlmutter trick.
-    This avoids O(n^2) explicit Hessian storage.
-    """
-    # Define the gradient of the log-likelihood
-    def grad_log_lik(p):
-        return grad(log_likelihood_fn)(p)
-
-    # Use VJP (Vector-Jacobian Product) to get the second-order curvature
-    _, vjp_fn = vjp(grad_log_lik, params)
-    return vjp_fn(vectors)[0]
-
-@jit
-def harden_metric_tensor(fvp_matrix, ridge_epsilon=1e-5):
-    """
-    Stabilizes the Fisher Metric. 
-    Ensures the manifold is Isostatic and Positive-Definite.
-    """
-    # Apply Tikhonov regularization (Ridge) to prevent singular manifolds
-    dim = fvp_matrix.shape[0]
-    stable_g = fvp_matrix + ridge_epsilon * jnp.eye(dim)
+class RecursiveStateManifold:
+    """The ARSM Engine: Managing temporal 'Vibración'."""
     
-    # Force symmetry (Crystalline constraint)
-    return 0.5 * (stable_g + stable_g.T)
-
-class FisherHardener:
-    """The AFRH Regulator for Manifold Curvature."""
-    
-    def __init__(self, model_fn, ridge=1e-6):
-        self.model_fn = model_fn
-        self.ridge = ridge
-
-    def get_natural_gradient(self, params, loss_grad, fisher_metric):
-        """
-        Solves the Natural Gradient equation: g * \tilde{\nabla} = \nabla
-        This is the path of steepest descent in the Riemannian manifold.
-        """
-        # Solves for \tilde{\nabla} (the Natural Gradient)
-        natural_grad = jnp.linalg.solve(fisher_metric, loss_grad)
-        return natural_grad
+    def __init__(self, state_dim=16):
+        self.state_dim = state_dim
 
     @jit
-    def calculate_curvature(self, params, sample_batch):
+    def update_state(self, current_state, observation, metric_g):
         """
-        Calculates the explicit Metric Tensor g_ij for a batch.
-        Essential for the AFRC transport layer.
+        Updates the recursive state using the Riemannian Geodesic.
+        h_{t+1} = h_t + \eta * (g^{-1} @ grad)
         """
-        # Note: In production, we vmap the FVP over the batch
-        # for maximum XLA throughput.
-        def single_fisher(p, x):
-            # Stochastic approximation of the local curvature
-            g_local = jax.hessian(self.model_fn)(p, x)
-            return g_local
+        # 1. Project observation into state space
+        # We treat the hidden state as a point moving on the manifold
+        innovation = observation - current_state
+        
+        # 2. Apply the Metric Regulator (The 'Equilibrio')
+        # We solve for the geodesic update to ensure we don't 'drift' off the manifold
+        geodesic_update = jnp.linalg.solve(metric_g, innovation)
+        
+        # 3. Recursive Integration (The 'Unión')
+        # We use a dampening factor to maintain 'Calma'
+        eta = 0.1 
+        next_state = current_state + eta * geodesic_update
+        
+        return next_state
 
-        batch_g = vmap(single_fisher, in_axes=(None, 0))(params, sample_batch)
-        return jnp.mean(batch_g, axis=0)
+    def initialize_manifold(self, seed=42):
+        """Generates the initial crystalline state of the system."""
+        key = jax.random.PRNGKey(seed)
+        return jax.random.normal(key, (self.state_dim,))
+
+    @jit
+    def state_coherence(self, states_batch):
+        """
+        Measures the 'Clarity' of the state across a swarm batch.
+        Uses the Trace of the Covariance to calculate dispersion.
+        """
+        centroid = jnp.mean(states_batch, axis=0)
+        dispersion = jnp.linalg.norm(states_batch - centroid, axis=1)
+        return jnp.mean(dispersion)
+
+# --- SWARM INTEGRATION LOOP ---
+def run_state_step(sm, h_t, obs_t, g_t):
+    """A single tick of the Tungsten clock."""
+    h_next = sm.update_state(h_t, obs_t, g_t)
+    coherence = sm.state_coherence(h_next.reshape(1, -1)) # Expand for batch check
+    return h_next, coherence
