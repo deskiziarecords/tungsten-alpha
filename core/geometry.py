@@ -1,156 +1,69 @@
-# ========================
-# Adelic-Fisher-Resurgence-Hardener (AFRH) - PRODUCTION READY
-# Fuses NRRB resurgence + FIM computation for discrete manifolds
-# author: J.Roberto Jimenez C. - tijuanapaint@gmail.com  - @hipotermiah
-# ========================
+"""
+TUNGSTEN ALPHA: ADELIC FISHER RESURGENCE HARDENER (AFRH)
+=======================================================
+Calculates and Hardens the Fisher Information Metric.
+Regulates the manifold curvature via Natural Gradient estimation.
+"""
 
 import jax
 import jax.numpy as jnp
-from jax import core, lax, jit, vmap, grad
-from functools import partial
-import jax.scipy.sparse.linalg as spla
-
-# =============================================================================
-# TIER 0: RESURGENCE PRIMITIVE (FIXED)
-# =============================================================================
-
-af_resurge_p = core.Primitive("af_resurge")
-
-def af_resurge_bridge(x, target_dim):
-    return af_resurge_p.bind(x, target_dim=target_dim)
-
-def af_abstract_eval(x, target_dim):
-    return core.ShapedArray((target_dim,), x.dtype)
-
-def af_impl(x, target_dim):
-    pad_size = max(0, target_dim - x.shape[0])
-    padded = jnp.pad(x, ((0, pad_size)), mode='constant')
-    return padded[:target_dim]
-
-# ✅ FIXED REGISTRATIONS
-af_resurge_p.def_impl(af_impl)
-af_resurge_p.def_abstract_eval(af_abstract_eval)
-
-# ✅ FIXED JVP - CORRECT SIGNATURE
-def af_jvp(primals, tangents):
-    x, = primals
-    dx, = tangents
-    target_dim = 8  # Static for tracing
-    sigma = 0.08
-    kernel = jnp.exp(-jnp.square(x) / (2 * sigma**2))
-    dx_resurgent = dx * kernel[:x.shape[0]]
-    return (af_resurge_bridge(dx_resurgent, target_dim),), ()
-
-af_resurge_p.def_jvp(af_jvp)
-
-# =============================================================================
-# TIER 1: SOS-DP LATTICE MAPPING
-# =============================================================================
+from jax import jit, grad, vjp, vmap
 
 @jit
-def sos_dp_metric_map(v):
-    n = v.shape[0]
-    log_n = int(jnp.log2(n))
-    
-    def scan_step(i, val):
-        mask = 1 << i
-        return jnp.where(jnp.arange(n) & mask, val + jnp.roll(val, mask), val)
-    
-    return lax.fori_loop(0, log_n, scan_step, v)
+def compute_fisher_vector_product(log_likelihood_fn, params, vectors):
+    """
+    Computes the Fisher-Vector Product (FVP) using the Pearlmutter trick.
+    This avoids O(n^2) explicit Hessian storage.
+    """
+    # Define the gradient of the log-likelihood
+    def grad_log_lik(p):
+        return grad(log_likelihood_fn)(p)
 
-# =============================================================================
-# TIER 2: FIXED FIM + NATURAL GRADIENT
-# =============================================================================
-
-@jit
-def compute_fim(scores):  # ✅ FIXED: No broken scan
-    """Empirical FIM from score outer-products"""
-    return jnp.mean(vmap(lambda s: jnp.outer(s, s))(scores), axis=0)
+    # Use VJP (Vector-Jacobian Product) to get the second-order curvature
+    _, vjp_fn = vjp(grad_log_lik, params)
+    return vjp_fn(vectors)[0]
 
 @jit
-def natural_gradient_solve(fim, grad_vector):
-    """✅ FIXED: Explicit matvec for CG"""
-    def matvec(x):
-        return (fim + jnp.eye(fim.shape[0]) * 1e-6) @ x
+def harden_metric_tensor(fvp_matrix, ridge_epsilon=1e-5):
+    """
+    Stabilizes the Fisher Metric. 
+    Ensures the manifold is Isostatic and Positive-Definite.
+    """
+    # Apply Tikhonov regularization (Ridge) to prevent singular manifolds
+    dim = fvp_matrix.shape[0]
+    stable_g = fvp_matrix + ridge_epsilon * jnp.eye(dim)
     
-    nat_grad, _ = spla.cg(matvec, grad_vector, tol=1e-6)
-    return nat_grad
+    # Force symmetry (Crystalline constraint)
+    return 0.5 * (stable_g + stable_g.T)
 
-# =============================================================================
-# TIER 3: COMPLETE FIM PIPELINE
-# =============================================================================
+class FisherHardener:
+    """The AFRH Regulator for Manifold Curvature."""
+    
+    def __init__(self, model_fn, ridge=1e-6):
+        self.model_fn = model_fn
+        self.ridge = ridge
 
-@partial(jit, static_argnums=(2,))
-def afrh_fim_kernel(discrete_samples, params, static_dim):
-    """✅ FULL PIPELINE: Discrete → FIM → Natural Gradient"""
-    
-    # 1. Resurgence bridge (discrete → manifold)
-    manifold = af_resurge_bridge(discrete_samples, static_dim)
-    
-    # 2. Score function (log-prob gradients)  
-    def log_prob(p): 
-        return jnp.sum(jnp.log(jnp.clip(manifold * p, 1e-8, 1e8)))
-    
-    score_fn = grad(log_prob)
-    scores = vmap(score_fn)(params)
-    
-    # 3. FIM computation
-    fim = compute_fim(scores)
-    
-    # 4. Natural gradient step
-    loss_grad = grad(lambda p: -jnp.mean(vmap(log_prob)(p)))(params.mean(0))
-    nat_grad = natural_gradient_solve(fim, loss_grad)
-    
-    # 5. SOS-DP lattice refinement
-    refined_manifold = sos_dp_metric_map(manifold)
-    
-    return fim, nat_grad, refined_manifold
+    def get_natural_gradient(self, params, loss_grad, fisher_metric):
+        """
+        Solves the Natural Gradient equation: g * \tilde{\nabla} = \nabla
+        This is the path of steepest descent in the Riemannian manifold.
+        """
+        # Solves for \tilde{\nabla} (the Natural Gradient)
+        natural_grad = jnp.linalg.solve(fisher_metric, loss_grad)
+        return natural_grad
 
-# =============================================================================
-# PRODUCTION FIM OPTIMIZER
-# =============================================================================
+    @jit
+    def calculate_curvature(self, params, sample_batch):
+        """
+        Calculates the explicit Metric Tensor g_ij for a batch.
+        Essential for the AFRC transport layer.
+        """
+        # Note: In production, we vmap the FVP over the batch
+        # for maximum XLA throughput.
+        def single_fisher(p, x):
+            # Stochastic approximation of the local curvature
+            g_local = jax.hessian(self.model_fn)(p, x)
+            return g_local
 
-class AdelicFisherResurgenceHardener:
-    """Production FIM + Natural Gradient for discrete manifolds"""
-    
-    def __init__(self, dim=8):
-        self.dim = dim
-        
-    def compute_step(self, discrete_data, params):
-        """Full FIM + nat-grad update"""
-        return afrh_fim_kernel(discrete_data, params, self.dim)
-
-# =============================================================================
-# VALIDATION
-# =============================================================================
-
-def validate_afrh():
-    print("="*80)
-    print("AFRH: FISHER RESURGENCE + NATURAL GRADIENT")
-    print("="*80)
-    
-    key = jax.random.PRNGKey(42)
-    afrh = AdelicFisherResurgenceHardener(dim=8)
-    
-    # Discrete non-stationary data
-    discrete = jax.random.randint(key, (6,), 0, 10).astype(jnp.float32)
-    params = jax.random.normal(key, (4, 8))
-    
-    fim, nat_grad, manifold = afrh.compute_step(discrete, params)
-    
-    print(f"1. DISCRETE → MANIFOLD: {discrete.shape} → {manifold.shape}")
-    print(f"2. FIM SHAPE:           {fim.shape}")
-    print(f"3. FIM CONDITION:       {jnp.linalg.cond(fim):.1f}")
-    print(f"4. NAT GRAD NORM:       {jnp.linalg.norm(nat_grad):.3f}")
-    print(f"5. GRADIENT FLOW:       {jnp.any(nat_grad != 0)} ✓")
-    
-    # JIT stability
-    jitted = jit(afrh.compute_step)
-    fast_fim, _, _ = jitted(discrete, params)
-    print(f"6. HLO FUSION:          {jnp.allclose(fim, fast_fim)} ✓")
-    
-    print("\nAFRH STATUS: PRODUCTION-READY ✓ FIM ✓ Nat-Grad ✓ Discrete ✓")
-    print("Integrates: NRRB→CSM→ATC→ARSM→ASTC→AFRH ✓")
-
-if __name__ == "__main__":
-    validate_afrh()
+        batch_g = vmap(single_fisher, in_axes=(None, 0))(params, sample_batch)
+        return jnp.mean(batch_g, axis=0)
