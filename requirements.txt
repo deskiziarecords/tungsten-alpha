@@ -1,0 +1,16 @@
+# --- TUNGSTEN ALPHA CORE DEPENDENCIES ---
+# The foundation of the Crystalline Manifold
+jax>=0.4.26
+jaxlib>=0.4.26
+
+# Persistence and Hardening
+# Used in deployment/orbax_config.py
+orbax-checkpoint>=0.5.0
+chex>=0.1.85
+
+# Used in visualization/dashboard.py
+matplotlib>=3.8.0
+numpy>=1.26.0
+
+# Numerical Utilities
+optax>=0.2.1
