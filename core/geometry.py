@@ -1,7 +1,8 @@
-"""
-Adelic-Fisher-Resurgence-Hardener (AFRH) - PRODUCTION READY
-Fuses NRRB resurgence + FIM computation for discrete manifolds
-"""
+# ========================
+# Adelic-Fisher-Resurgence-Hardener (AFRH) - PRODUCTION READY
+# Fuses NRRB resurgence + FIM computation for discrete manifolds
+# author: J.Roberto Jimenez C. - tijuanapaint@gmail.com  - @hipotermiah
+# ========================
 
 import jax
 import jax.numpy as jnp
