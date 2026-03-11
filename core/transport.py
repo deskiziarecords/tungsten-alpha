@@ -1,8 +1,8 @@
-"""
-Adelic-Fisher-Riemann-Connector (AFRC) - PRODUCTION READY
-Crystalline Fisher metric propagation across decentralized clusters
-author: J.Roberto Jimenez C. - tijuanapaint@gmail.com  - @hipotermiah
-"""
+# =======================
+# Adelic-Fisher-Riemann-Connector (AFRC) - PRODUCTION READY
+# Crystalline Fisher metric propagation across decentralized clusters
+# author: J.Roberto Jimenez C. - tijuanapaint@gmail.com  - @hipotermiah
+# ========================
 
 import jax
 import jax.numpy as jnp
