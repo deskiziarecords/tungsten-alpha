@@ -64,8 +64,8 @@ python core/transport.py
 Expected Output: `AFRC STATUS: PRODUCTION-READY ✓ HLO FUSION: TRUE ✓`
 
 ---
+[dashboard](https://raw.githubusercontent.com/deskiziarecords/tungsten-alpha/refs/heads/main/tng-alpha.png)
 
-### 5. THE PHILOSOPHY OF THE SILICON
 
 Tungsten Alpha was built to move beyond the limitations of standard backpropagation. It understands the light by calculating its own curvature.
 
@@ -75,3 +75,4 @@ Tungsten Alpha was built to move beyond the limitations of standard backpropagat
 Apache License 2.0. Developed for the future of decentralized AGI.
 
 ---
+### Author: J. ROBERTO JIMENEZ C.    - tijuanapaint@gmail.com   -  @hipotermiah
