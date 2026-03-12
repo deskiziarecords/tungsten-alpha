@@ -7,6 +7,7 @@ Eliminates JIT-overhead by enforcing geometric invariants at boot-time.
 
 import jax
 import jax.numpy as jnp
+import functools
 from jax import jit, lax
 from typing import Tuple
 
@@ -18,7 +19,7 @@ class StaticManifold:
         self.dtype = dtype
         self.size = jnp.prod(jnp.array(shape))
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def project_to_lattice(self, dynamic_tensor):
         """
         Abstract Interpretation Layer:
@@ -30,7 +31,9 @@ class StaticManifold:
         static_signal = jnp.zeros(self.shape, dtype=self.dtype)
         
         # Calculate valid slice indices to avoid dynamic shape errors in XLA
-        slice_shape = jnp.minimum(jnp.array(dynamic_tensor.shape), jnp.array(self.shape))
+        # We must use concrete shapes for lax.dynamic_slice
+        d_shape = dynamic_tensor.shape
+        slice_shape = tuple(min(d, s) for d, s in zip(d_shape, self.shape))
         
         # Perform a 'Crystalline Slice' and update the static lattice
         # This ensures the HLO trace remains constant regardless of input flux.
@@ -50,7 +53,7 @@ class StaticManifold:
         # Stability check: Ratio should be near 1.0
         return jnp.abs(dist_a - dist_b) < 1e-5
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def crystalline_norm(self, lattice):
         """Calculates the energy density of the static manifold."""
         return jnp.sqrt(jnp.sum(jnp.square(lattice)))

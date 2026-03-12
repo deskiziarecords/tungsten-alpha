@@ -7,6 +7,7 @@ Preserves system 'Calma' across non-stationary time-steps.
 
 import jax
 import jax.numpy as jnp
+import functools
 from jax import jit, lax
 
 class RecursiveStateManifold:
@@ -15,7 +16,7 @@ class RecursiveStateManifold:
     def __init__(self, state_dim=16):
         self.state_dim = state_dim
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def update_state(self, current_state, observation, metric_g):
         """
         Updates the recursive state using the Riemannian Geodesic.
@@ -41,7 +42,7 @@ class RecursiveStateManifold:
         key = jax.random.PRNGKey(seed)
         return jax.random.normal(key, (self.state_dim,))
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def state_coherence(self, states_batch):
         """
         Measures the 'Clarity' of the state across a swarm batch.

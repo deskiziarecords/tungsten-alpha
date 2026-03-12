@@ -7,6 +7,7 @@ Implements the SOS-DP interaction lattice for hardware alignment.
 
 import jax
 import jax.numpy as jnp
+import functools
 from jax import jit, lax
 
 class TraceCrystallizer:
@@ -16,7 +17,7 @@ class TraceCrystallizer:
         self.target_dim = target_dim
         self.lattice_size = lattice_size
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def sos_dp_interaction(self, telemetry_stream):
         """
         Sum-of-Squares Dynamic Programming (SOS-DP).
@@ -57,7 +58,7 @@ class TraceCrystallizer:
         
         return compiled
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def map_to_manifold(self, crystallized_lattice):
         """
         Maps the hardened lattice back into the 16D Riemannian Manifold.

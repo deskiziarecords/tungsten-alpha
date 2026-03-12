@@ -8,7 +8,9 @@ Ensures Information Isometry across decentralized clusters.
 import jax
 import jax.numpy as jnp
 from jax import core, lax, jit
-from jax.core import Primitive
+from jax.extend.core import Primitive
+from jax._src.interpreters import ad
+from jax.interpreters import mlir
 
 # --- THE TRANSPORT PRIMITIVE ---
 # We define this as a core primitive to ensure XLA recognizes the 
@@ -57,7 +59,20 @@ def afrc_transport_jvp(primals, tangents):
     
     return (g_out,), (dg_out,)
 
-afrc_transport_p.def_jvp(afrc_transport_jvp)
+ad.primitive_jvps[afrc_transport_p] = afrc_transport_jvp
+
+def afrc_transport_mlir_lowering(ctx, metric_g, connection_omega):
+    """MLIR lowering for the transport primitive."""
+    # We use a standard matrix multiplication lowering
+    # g_new = Ω @ g @ Ω.T
+    # This is roughly: dot(omega, dot(g, transpose(omega)))
+
+    # In JAX, we can often just define the lowering in terms of other primitives
+    # or use the lower_fun helper.
+    return mlir.lower_fun(afrc_transport_impl, multiple_results=False)(
+        ctx, metric_g, connection_omega)
+
+mlir.register_lowering(afrc_transport_p, afrc_transport_mlir_lowering)
 
 # --- PRODUCTION API ---
 @jit
