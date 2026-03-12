@@ -43,6 +43,10 @@ class FisherHardener:
         self.model_fn = model_fn
         self.ridge = ridge
 
+    def harden_metric_tensor(self, fvp_matrix, ridge_epsilon=1e-5):
+        """Instance method to harden the metric tensor."""
+        return harden_metric_tensor(fvp_matrix, ridge_epsilon)
+
     def get_natural_gradient(self, params, loss_grad, fisher_metric):
         """
         Solves the Natural Gradient equation: g * \tilde{\nabla} = \nabla

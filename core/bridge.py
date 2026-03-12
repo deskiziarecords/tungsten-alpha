@@ -7,17 +7,19 @@ Uses Weierstrass-Gaussian resurgence to bypass the 'Binary Lag'.
 
 import jax
 import jax.numpy as jnp
+import functools
 from jax import jit, custom_jvp
 
 @custom_jvp
-def resurgent_threshold(x, threshold=0.5):
+def resurgent_threshold(x):
     """
     The Primal Switch: A discrete logical gate.
     In the forward pass, it remains a rigid bit-accurate switch.
     """
+    threshold = 0.5
     return jnp.where(x > threshold, 1.0, 0.0)
 
-@resurgent_threshold.def_jvp
+@resurgent_threshold.defjvp
 def resurgent_threshold_jvp(primals, tangents):
     """
     The Resurgence Bridge: The differentiable "Ghost" in the machine.
@@ -44,13 +46,13 @@ class ResurgenceBridge:
     def __init__(self, sigma=0.08):
         self.sigma = sigma
 
-    @jit
+    @functools.partial(jit, static_argnums=(0,))
     def apply_bridge(self, manifold_signal):
         """
         Passes a 16D manifold signal through the Resurgent Bridge.
         Allows the Fisher Metric to 'sense' the logic gates ahead.
         """
-        return resurgent_threshold(x=manifold_signal)
+        return resurgent_threshold(manifold_signal)
 
     def measure_resurgence_energy(self, signal):
         """Calculates the 'Vibración'—the gradient potential at the gate."""
