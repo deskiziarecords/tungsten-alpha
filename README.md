@@ -75,4 +75,10 @@ Tungsten Alpha was built to move beyond the limitations of standard backpropagat
 Apache License 2.0. Developed for the future of decentralized AGI.
 
 ---
+## Support My Work
+
+If you enjoy my work and would like to support me, consider buying me a coffee! 
+
+[![Buy Me a Coffee](https://cdn.buymeacoffee.com/buttons/v2/arial-multi.svg)](https://www.buymeacoffee.com/hipotermiah)
+
 ### Author: J. ROBERTO JIMENEZ C.    - tijuanapaint@gmail.com   -  @hipotermiah
